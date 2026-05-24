@@ -1,0 +1,218 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                    NESTJS MONOREPO - QUICK REFERENCE                          ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+🎯 STARTUP SEQUENCE
+──────────────────────────────────────────────────────────────────────────────────
+
+1. Setup:
+   cp .env.example .env
+   docker-compose up -d
+   npm install
+
+2. Services (start in order, each in separate terminal):
+   npm run start:dev:auth-service              # Port 3001 (TCP)
+   npm run start:dev:user-service              # Port 3002 (TCP)
+   npm run start:dev:notification-worker       # Port 3003 (RabbitMQ + WebSocket)
+   npm run start:dev:api-gateway               # Port 3000 (HTTP)
+
+3. Test:
+   curl http://localhost:3000/api/health
+   http://localhost:3000/docs                  # Swagger docs
+
+📊 SERVICES SUMMARY
+──────────────────────────────────────────────────────────────────────────────────
+
+API Gateway (3000)          | REST API, Swagger, JWT, Rate limit, ClientProxy
+Auth Service (3001)         | User auth, JWT tokens, MongoDB
+User Service (3002)         | CRUD, Repository, MongoDB
+Notification Worker (3003)  | RabbitMQ consumer, WebSocket, Multi-channel
+
+📚 KEY ENDPOINTS
+──────────────────────────────────────────────────────────────────────────────────
+
+POST   /api/auth/register      - Register new user
+POST   /api/auth/login         - Login user
+POST   /api/auth/logout        - Logout (requires token)
+POST   /api/auth/refresh       - Refresh JWT tokens
+
+GET    /api/users              - List users (requires token)
+GET    /api/users/me           - Get current user (requires token)
+GET    /api/users/:id          - Get user by ID (requires token)
+PUT    /api/users/:id          - Update user (requires token)
+DELETE /api/users/:id          - Delete user (admin only)
+
+GET    /api/health             - Health check (public)
+
+🔑 AUTHENTICATION
+──────────────────────────────────────────────────────────────────────────────────
+
+Token Type:     JWT (Bearer)
+Access TTL:     15 minutes (configurable)
+Refresh TTL:    7 days (configurable)
+Hashing:        bcrypt (12 rounds)
+
+Example header:
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+💾 DATABASE
+──────────────────────────────────────────────────────────────────────────────────
+
+Type:           MongoDB (Atlas)
+Config:         MONGO_URI in .env
+Collections:    users
+Schema:         User (email, password, name, roles, timestamps)
+
+Test connection:
+mongosh "mongodb://..." (if mongosh installed)
+docker logs nestjs_mongodb
+
+📨 MESSAGE BROKER
+──────────────────────────────────────────────────────────────────────────────────
+
+Broker:         RabbitMQ
+Config:         RABBITMQ_URI in .env
+Queue:          notification.queue
+DLX/DLQ:        For retry logic
+
+Monitor:
+http://localhost:15672        (guest/guest)
+docker logs nestjs_rabbitmq
+
+🔧 ENVIRONMENT VARIABLES
+──────────────────────────────────────────────────────────────────────────────────
+
+Required:
+MONGO_URI                - MongoDB connection string
+JWT_ACCESS_SECRET        - JWT signing key
+JWT_REFRESH_SECRET       - Refresh token signing key
+
+Ports:
+GATEWAY_PORT=3000
+AUTH_SERVICE_PORT=3001
+USER_SERVICE_PORT=3002
+WS_PORT=3003
+
+Optional:
+SMTP_HOST, SMTP_USER, SMTP_PASSWORD         - Email
+FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL  - Push notifications
+TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN       - SMS
+
+📁 PROJECT STRUCTURE
+──────────────────────────────────────────────────────────────────────────────────
+
+apps/
+├── api-gateway/        HTTP REST API
+├── auth-service/       User authentication
+├── user-service/       User management
+└── notification-worker/ RabbitMQ consumer + WebSocket
+
+libs/
+├── common/             Decorators, Guards, Filters, Interceptors
+└── database/           MongoDB, Mongoose, Repository pattern
+
+🐳 DOCKER COMMANDS
+──────────────────────────────────────────────────────────────────────────────────
+
+Start services:
+docker-compose up -d
+
+Stop services:
+docker-compose down
+
+View logs:
+docker-compose logs -f [service_name]
+
+Services:
+- nestjs_mongodb (port 27017)
+- nestjs_redis (port 6379)
+- nestjs_rabbitmq (ports 5672, 15672)
+
+🧪 TEST FLOW
+──────────────────────────────────────────────────────────────────────────────────
+
+1. Register:
+   curl -X POST http://localhost:3000/api/auth/register \
+     -H "Content-Type: application/json" \
+     -d '{"email":"test@test.com","password":"Test123!","name":"Test"}'
+
+2. Login:
+   curl -X POST http://localhost:3000/api/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"email":"test@test.com","password":"Test123!"}'
+   
+   Copy accessToken from response
+
+3. Get User (paste token):
+   curl -X GET http://localhost:3000/api/users/me \
+     -H "Authorization: Bearer YOUR_TOKEN"
+
+4. List Users:
+   curl -X GET "http://localhost:3000/api/users?page=1&limit=10" \
+     -H "Authorization: Bearer YOUR_TOKEN"
+
+✅ VERIFICATION CHECKLIST
+──────────────────────────────────────────────────────────────────────────────────
+
+All services started without errors ............................ [ ]
+Health endpoint returns 200 OK ................................ [ ]
+Can register new user ......................................... [ ]
+Can login and receive JWT tokens ............................... [ ]
+Can access protected routes with token ......................... [ ]
+User data saved in MongoDB .................................... [ ]
+RabbitMQ queue created ......................................... [ ]
+WebSocket connection works ..................................... [ ]
+Swagger docs at /docs .......................................... [ ]
+No errors in service logs ...................................... [ ]
+
+🚀 DEPLOYMENT
+──────────────────────────────────────────────────────────────────────────────────
+
+Build all services:
+npm run build
+
+Build individual apps:
+npm run build:api-gateway
+npm run build:auth-service
+npm run build:user-service
+npm run build:notification-worker
+
+Deploy to AWS/Kubernetes/Docker:
+Each service can be deployed independently.
+Use dist/apps/[service]/main.js as entry point.
+
+📖 DOCUMENTATION
+──────────────────────────────────────────────────────────────────────────────────
+
+README.md                  - Architecture overview
+TESTING_GUIDE.md           - Testing instructions
+API_REFERENCE.md           - All endpoints
+SYSTEM_READY.md            - Getting started
+VERIFICATION_CHECKLIST.md  - Component verification
+COMPLETION_SUMMARY.md      - What was built
+
+❓ TROUBLESHOOTING
+──────────────────────────────────────────────────────────────────────────────────
+
+Port in use:
+lsof -i :3000     # Check what's using port
+kill -9 <PID>     # Kill the process
+
+MongoDB not connecting:
+docker restart nestjs_mongodb
+docker logs nestjs_mongodb
+
+RabbitMQ not connecting:
+docker restart nestjs_rabbitmq
+docker logs nestjs_rabbitmq
+
+Services not responding:
+Check service logs: npm run start:dev:SERVICE_NAME
+Verify env variables in .env
+Check firewall/port accessibility
+
+═════════════════════════════════════════════════════════════════════════════════
+
+For complete documentation, see README.md and TESTING_GUIDE.md
+
+═════════════════════════════════════════════════════════════════════════════════
