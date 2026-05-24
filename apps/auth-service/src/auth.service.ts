@@ -1,10 +1,19 @@
-import { Injectable, Logger, HttpStatus, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  HttpStatus,
+  BadRequestException,
+  UnauthorizedException,
+  Inject,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { ClientProxy } from '@nestjs/microservices';
+import { firstValueFrom } from 'rxjs';
 import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from '@app/database';
-import { UserRole } from '@app/common';
+import { UserRole, EVENT_PATTERNS } from '@app/common';
 
 @Injectable()
 export class AuthService {
@@ -14,6 +23,7 @@ export class AuthService {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly jwtService: JwtService,
+    @Inject('EVENTS_CLIENT') private readonly eventsClient: ClientProxy,
   ) {}
 
   async register(dto: { email: string; password: string; name: string }) {
@@ -32,6 +42,20 @@ export class AuthService {
 
     const tokens = this._generateTokens(user);
     this.logger.log(`User registered: ${user._id}`);
+
+    try {
+      await firstValueFrom(
+        this.eventsClient.emit(EVENT_PATTERNS.USER_CREATED, {
+          userId: user._id.toString(),
+          email: user.email,
+          name: user.name,
+        }),
+      );
+      this.logger.log(`Published USER_CREATED event for user ${user._id}`);
+    } catch (err) {
+      this.logger.error(`Failed to publish USER_CREATED event: ${err}`);
+    }
+
     return { user: this._sanitizeUser(user), ...tokens };
   }
 
